@@ -18,6 +18,7 @@
 
 
 
+// Messages struct with 3 variables
 struct message
 {
   int type;
@@ -34,6 +35,12 @@ struct message message_queue[QUEUE_LENGTH];
 int qin = 0, qout = 0;
 int msg_count = 0;
 
+void swap(double *x, double *y)
+{
+    *x = *x + *y;
+    *y = *x - *y;                     //Just a swap function
+    *x = *x - *y;
+}
 
 
 void send(int type, int start, int end)
@@ -43,10 +50,10 @@ void send(int type, int start, int end)
 
   while(msg_count >= QUEUE_LENGTH)
   {
-    printf("*Locked send*\n");
     pthread_cond_wait(&msg_out, &mutex);
   }
 
+  //Prepare the packet
   message_queue[qin].type = type;
   message_queue[qin].start = start;
   message_queue[qin].end = end;
@@ -70,10 +77,10 @@ void receive(int *type, int *start, int *end)
 
   while(msg_count < 1)
   {
-    printf("*Locked receive*\n");
     pthread_cond_wait(&msg_in, &mutex);
   }
 
+  //Release the packet
   *type = message_queue[qout].type;
   *start = message_queue[qout].start;
   *end = message_queue[qout].end;
@@ -84,12 +91,6 @@ void receive(int *type, int *start, int *end)
 
   pthread_cond_signal(&msg_out);
   pthread_mutex_unlock(&mutex);
-}
-
-void swap(double *a, double *b) {
-    double tmp = *a;
-    *a = *b;
-    *b = tmp;
 }
 
 
@@ -170,39 +171,34 @@ void *thread_func(void *params)
 
     int type, start, end;
 
-    receive(&type, &start, &end);
-
-
+    receive(&type, &start, &end);       //Wait for the first message
 
     while (type != STOP)
     {
         if(type == FINISH)
         {
-            printf("Finish\n");
-            send(FINISH, start, end);
+            send(FINISH, start, end);    //If a message type is FINISH send it to the main()
         }
         else if (type == WORK)
         {
 
           if ( (end - start) <= THRESHOLD)
           {
-              printf("Starting inssort()\n");
-              inssort(array + start, end - start);
+              inssort(array + start, end - start);    //If the array is smaller than the THRESHOLD sort it with insertion sort
               send(FINISH, start, end);
           }
           else
           {
-            printf("Starting QuicSort()\n");
-            QuickSort(array, start, end);
+            QuickSort(array, start, end);             //If the array is larger than the THRESHOLD sort it with Quick sort
           }
 
         }
 
-        receive(&type, &start, &end);
+        receive(&type, &start, &end);                 //Next message
 
     }
 
-    printf("Shutdown\n");
+    printf("Shutdown\n");                
     send(STOP, 0, 0);
 
     pthread_exit(NULL);
@@ -212,7 +208,9 @@ void *thread_func(void *params)
 
 int main()
 {
-    double *array = (double*) malloc(sizeof(double) * ARRAY_LENGTH);    
+    double *array = (double*) malloc(sizeof(double) * ARRAY_LENGTH);
+
+    printf("Allocate new array with size [%d]\n\n",ARRAY_LENGTH);
 
     if (!array)
     {
@@ -220,17 +218,19 @@ int main()
         exit(-1);
     }
 
-
+    printf("Fill the array[%d]: ",ARRAY_LENGTH);
 
     for(int i = 0; i < ARRAY_LENGTH; i++)
     {
         array[i] = (double) rand() / RAND_MAX;
+        printf("%f, ", array[i]);
     }
 
-
+    printf("\n\nFinnish\n");
 
     pthread_t thread_pool[NUM_THREADS];
 
+    printf("Create thread pool\n");
     for(int i = 0; i < NUM_THREADS; i++)
     {
       pthread_create(&thread_pool[i], NULL, thread_func, array);
@@ -245,6 +245,8 @@ int main()
     int messages = 0;
 
     receive(&type, &start, &end);
+
+    printf("\n---Messages state---\n\n");
 
     while (1)
     {
@@ -272,7 +274,7 @@ int main()
     {
         if (array[i] > array[i+1])
         {
-            printf("Error these elements are not sorted: [%d] = %f > [%d] = %f\n", i, array[i], i + 1, array[i+1]);
+            printf("\nError these elements are not sorted: [%d] = %f > [%d] = %f\n", i, array[i], i + 1, array[i+1]);
             success_check = false;
             break;
         }
@@ -280,13 +282,7 @@ int main()
 
     if(success_check == true)
     {
-      printf("SUCCESS array is sorted\n");
-    }
-
-
-    for(int i = 0; i < NUM_THREADS;i++)
-    {
-       pthread_join(my_thread[i], NULL);
+      printf("\nSUCCESS array is sorted\n");
     }
 
     free(array);
